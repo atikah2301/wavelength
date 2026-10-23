@@ -1,6 +1,7 @@
 import { PRESETS } from "./cards.js";
 import { createDial } from "./dial.js";
 import { randomTarget, scoreFor, directionCorrect } from "./scoring.js";
+import { guideHtml } from "./guide.js";
 import { getState, update, newId, exportJson, importJson, resetAll, saveFailed } from "./store.js";
 
 const view = document.getElementById("view");
@@ -10,6 +11,7 @@ const TABS = [
   { id: "play", label: "Play", icon: "🎯" },
   { id: "players", label: "Players", icon: "👥" },
   { id: "cards", label: "Cards", icon: "🃏" },
+  { id: "guide", label: "Guide", icon: "📖" },
   { id: "data", label: "Data", icon: "💾" },
 ];
 
@@ -36,9 +38,45 @@ function render() {
     notice ? `<p class="notice">${esc(notice)}</p>` : "",
   ].join("");
   notice = "";
-  const body = { play: renderPlay, players: renderPlayers, cards: renderCards, data: renderData }[tab]();
+  const body = {
+    play: renderPlay,
+    players: renderPlayers,
+    cards: renderCards,
+    guide: () => ({ html: guideHtml() }),
+    data: renderData,
+  }[tab]();
   view.innerHTML = banner + body.html;
+  applyTheme();
   body.after?.();
+}
+
+// Which side should be holding the device right now, or null when it doesn't
+// matter (setup, reveal, other tabs).
+function viewerIndex(game, round) {
+  if (!game || !round) return null;
+  const other = (game.turn + 1) % game.teams.length;
+  switch (round.phase) {
+    case "card":
+    case "peek":
+      return game.turn;
+    case "guess":
+      return game.mode === "duo" ? other : game.turn;
+    case "call":
+      return other;
+    default:
+      return null;
+  }
+}
+
+// Recolours the whole UI for the side that should be looking at the screen.
+function applyTheme() {
+  const { game } = getState();
+  const index = tab === "play" ? viewerIndex(game, game?.round) : null;
+  const root = document.documentElement;
+  if (index === null) delete root.dataset.team;
+  else root.dataset.team = String(index);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = getComputedStyle(root).getPropertyValue("--bg").trim() || "#14152b";
 }
 
 // ---------------------------------------------------------------- Play
@@ -51,13 +89,17 @@ function renderPlay() {
   return renderRound(game, round);
 }
 
+function roundNumber(game) {
+  return game.round?.number ?? Math.min(Math.floor(game.turnsTaken / 2) + 1, game.rounds);
+}
+
 function scoreboard(game, highlight = true) {
   return `<div class="scoreboard">${game.teams
     .map(
       (t, i) =>
-        `<div class="team-score${highlight && i === game.turn ? " active" : ""}"><span class="team-name">${esc(t.name)}</span><span class="score">${t.score}</span></div>`,
+        `<div class="team-score t${i}${highlight && i === game.turn ? " active" : ""}"><span class="team-name">${esc(t.name)}</span><span class="score">${t.score}</span></div>`,
     )
-    .join("")}</div><p class="dim center">First to ${game.targetScore}</p>`;
+    .join("")}</div><p class="dim center">Round ${roundNumber(game)} of ${game.rounds}</p>`;
 }
 
 function renderSetup() {
@@ -66,12 +108,18 @@ function renderSetup() {
     return { html: `<section class="card"><h2>New game</h2><p>You need at least two players. Add them in the Players tab.</p></section>` };
   }
   if (!setupDraft) {
-    setupDraft = { teams: [{ name: "Team 1", ids: [] }, { name: "Team 2", ids: [] }], target: 10 };
+    setupDraft = {
+      mode: players.length >= 4 ? "teams" : "duo",
+      duo: [players[0].id, players[1].id],
+      teams: [{ name: "Team 1", ids: [] }, { name: "Team 2", ids: [] }],
+      rounds: 5,
+    };
   }
   const d = setupDraft;
+  syncDraft(d, players);
   const teamHtml = d.teams
     .map(
-      (t, i) => `<div class="team-setup">
+      (t, i) => `<div class="team-setup t${i}">
         <input data-team-name="${i}" value="${esc(t.name)}" aria-label="Team ${i + 1} name" maxlength="30" />
         <div class="chips">${players
           .map(
@@ -82,18 +130,44 @@ function renderSetup() {
       </div>`,
     )
     .join("");
+  const duoHtml = [0, 1]
+    .map(
+      (i) => `<label for="duo-${i}" class="player-label t${i}">Player ${i + 1}</label>
+        <select id="duo-${i}" data-duo="${i}">${players
+          .map(
+            (p) =>
+              `<option value="${p.id}"${p.id === d.duo[i] ? " selected" : ""}${p.id === d.duo[1 - i] ? " disabled" : ""}>${esc(p.name)}</option>`,
+          )
+          .join("")}</select>`,
+    )
+    .join("");
   return {
     html: `<section class="card"><h2>New game</h2>
-      ${teamHtml}
-      <div class="row">
-        <button data-action="add-team"${d.teams.length >= 4 ? " disabled" : ""}>+ Team</button>
-        <button data-action="remove-team"${d.teams.length <= 2 ? " disabled" : ""}>− Team</button>
+      <div class="segmented" role="group" aria-label="Game mode">
+        <button class="seg${d.mode === "duo" ? " active" : ""}" data-action="set-mode" data-mode="duo">2 players</button>
+        <button class="seg${d.mode === "teams" ? " active" : ""}" data-action="set-mode" data-mode="teams">Teams</button>
       </div>
-      <label for="target-score">Play to</label>
-      <input id="target-score" type="number" min="1" max="50" value="${d.target}" />
+      <p class="dim">${
+        d.mode === "duo"
+          ? "Two players take turns as psychic. Each player's name is their team name, and the psychic scores."
+          : "Two teams of at least two. The psychic's team scores, and the other team can win a catch-up point."
+      }</p>
+      ${d.mode === "duo" ? duoHtml : teamHtml}
+      <label for="rounds">Number of rounds</label>
+      <input id="rounds" type="number" min="1" max="20" value="${d.rounds}" />
+      <p class="dim">A round is one turn as psychic for each ${d.mode === "duo" ? "player" : "team"}.</p>
       <button class="primary" data-action="start-game">Start game</button>
     </section>`,
   };
+}
+
+// Setup choices are kept in memory, so drop any player who was removed since.
+function syncDraft(d, players) {
+  const exists = (id) => players.some((p) => p.id === id);
+  const first = exists(d.duo[0]) ? d.duo[0] : players.find((p) => p.id !== d.duo[1])?.id;
+  const second = exists(d.duo[1]) && d.duo[1] !== first ? d.duo[1] : players.find((p) => p.id !== first)?.id;
+  d.duo = [first, second];
+  d.teams.forEach((t) => (t.ids = t.ids.filter(exists)));
 }
 
 function renderScoreboardOnly(game) {
@@ -111,7 +185,15 @@ function cardLabel(card) {
 function renderRound(game, round) {
   const team = game.teams[game.turn];
   const other = game.teams[(game.turn + 1) % game.teams.length];
-  const head = `${scoreboard(game)}<p class="center turn-line"><strong>${esc(team.name)}</strong> · psychic: <strong>${esc(playerName(round.psychicId))}</strong></p>`;
+  const duo = game.mode === "duo";
+  const psychicName = duo ? team.name : playerName(round.psychicId);
+  const turnLine = duo
+    ? `Psychic: <strong>${esc(team.name)}</strong> · Guesser: <strong>${esc(other.name)}</strong>`
+    : `<strong>${esc(team.name)}</strong> · psychic: <strong>${esc(psychicName)}</strong>`;
+  const holder = { card: psychicName, peek: psychicName, guess: duo ? other.name : team.name, call: other.name }[round.phase];
+  const head = `${scoreboard(game)}<p class="center turn-line">${turnLine}</p>${
+    holder ? `<p class="center"><span class="handoff">📱 Device with <strong>${esc(holder)}</strong></span></p>` : ""
+  }`;
   const abandon = `<button class="link danger" data-action="abandon">Abandon game</button>`;
 
   if (round.phase === "card") {
@@ -153,7 +235,11 @@ function renderRound(game, round) {
       html: `<section class="card">${head}
         ${cardLabel(round.card)}
         <div id="dial-host"></div>
-        <p class="center dim">Psychic gives a clue. ${esc(team.name)} discuss, then drag the needle.</p>
+        <p class="center dim">${
+          duo
+            ? `${esc(team.name)} gives a clue, then ${esc(other.name)} drags the needle to where they think the target is.`
+            : `Psychic gives a clue. ${esc(team.name)} discuss, then drag the needle.`
+        }</p>
         <button class="primary" data-action="lock-guess">Lock in guess</button></section>${abandon}`,
       after: () => {
         const dial = createDial(document.getElementById("dial-host"), {
@@ -181,9 +267,14 @@ function renderRound(game, round) {
   }
 
   // reveal
-  const over = game.teams.some((t) => t.score >= game.targetScore);
-  const top = [...game.teams].sort((a, b) => b.score - a.score);
-  const decided = over && top[0].score > top[1].score;
+  const over = game.turnsTaken >= game.rounds * 2;
+  const [first, second] = game.teams;
+  const winner = first.score > second.score ? first : second;
+  const verdict = !over
+    ? ""
+    : first.score === second.score
+      ? `<p class="center big win">🤝 It's a draw!</p>`
+      : `<p class="center big win">🏆 ${esc(winner.name)} win${game.mode === "duo" ? "s" : ""}!</p>`;
   return {
     html: `<section class="card">${scoreboard(game, false)}
       ${cardLabel(round.card)}
@@ -194,8 +285,8 @@ function renderRound(game, round) {
           ? ""
           : `<p class="center">${esc(other.name)} called ${round.call}: ${round.bonus ? "correct, +1" : "wrong"}</p>`
       }
-      ${decided ? `<p class="center big win">🏆 ${esc(top[0].name)} win!</p>` : ""}
-      <button class="primary" data-action="${decided ? "finish" : "new-round"}">${decided ? "Finish game" : "Next turn"}</button></section>`,
+      ${verdict}
+      <button class="primary" data-action="${over ? "finish" : "new-round"}">${over ? "Finish game" : "Next turn"}</button></section>`,
     after: () => createDial(document.getElementById("dial-host")).update({ target: round.target, showTarget: true, guess: round.guess }),
   };
 }
@@ -220,6 +311,7 @@ function startRound() {
     team.psychicCount += 1;
     game.round = {
       phase: "card",
+      number: Math.floor(game.turnsTaken / 2) + 1,
       card: drawCard(game),
       target: randomTarget(),
       guess: 50,
@@ -243,6 +335,7 @@ function revealRound(call) {
     team.score += round.points;
     if (round.bonus) other.score += 1;
     round.phase = "reveal";
+    game.turnsTaken += 1;
   });
 }
 
@@ -259,10 +352,12 @@ function finishGame() {
   update((s) => {
     const game = s.game;
     const top = Math.max(...game.teams.map((t) => t.score));
+    const draw = game.teams.every((t) => t.score === top);
     s.history.push({
       id: game.id,
+      mode: game.mode,
       finishedAt: new Date().toISOString(),
-      teams: game.teams.map((t) => ({ name: t.name, playerIds: t.playerIds, score: t.score, won: t.score === top })),
+      teams: game.teams.map((t) => ({ name: t.name, playerIds: t.playerIds, score: t.score, won: !draw && t.score === top })),
     });
     s.game = null;
   });
@@ -364,28 +459,37 @@ document.addEventListener("click", (event) => {
     case "tab":
       tab = el.dataset.tab;
       break;
-    case "add-team":
-      setupDraft.teams.push({ name: `Team ${setupDraft.teams.length + 1}`, ids: [] });
-      break;
-    case "remove-team":
-      setupDraft.teams.pop();
+    case "set-mode":
+      setupDraft.mode = el.dataset.mode;
       break;
     case "start-game": {
       const d = setupDraft;
-      if (d.teams.some((t) => !t.ids.length)) {
-        notice = "Every team needs at least one player.";
-        break;
+      let teams;
+      if (d.mode === "duo") {
+        if (!d.duo[0] || !d.duo[1]) {
+          notice = "Pick two different players.";
+          break;
+        }
+        teams = d.duo.map((id) => ({ name: playerName(id), playerIds: [id] }));
+      } else {
+        if (d.teams.some((t) => t.ids.length < 2)) {
+          notice = "Each team needs at least two players: a psychic and someone to guess.";
+          break;
+        }
+        teams = d.teams.map((t) => ({ name: t.name.trim() || "Team", playerIds: [...t.ids] }));
       }
-      const target = Math.min(50, Math.max(1, Number(document.getElementById("target-score").value) || 10));
+      const rounds = Math.min(20, Math.max(1, Math.round(Number(document.getElementById("rounds").value)) || 5));
       update((s) => {
         s.game = {
           id: newId(),
           startedAt: new Date().toISOString(),
-          targetScore: target,
+          mode: d.mode,
+          rounds,
+          turnsTaken: 0,
           turn: 0,
           usedCardIds: [],
           round: null,
-          teams: d.teams.map((t) => ({ name: t.name.trim() || "Team", playerIds: [...t.ids], score: 0, psychicCount: 0 })),
+          teams: teams.map((t) => ({ ...t, score: 0, psychicCount: 0 })),
         };
       });
       startRound();
@@ -441,7 +545,9 @@ document.addEventListener("click", (event) => {
       update((s) => (s.game.round.phase = "guess"));
       break;
     case "lock-guess":
-      update((s) => (s.game.round.phase = s.game.teams.length > 1 ? "call" : "reveal"));
+      // With two players there is nobody left to make the left/right call.
+      if (game.mode === "duo") revealRound("none");
+      else update((s) => (s.game.round.phase = "call"));
       break;
     case "call":
       revealRound(el.dataset.call);
@@ -503,8 +609,11 @@ document.addEventListener("change", (event) => {
     const team = setupDraft.teams[Number(t.dataset.teamPlayer)];
     team.ids = t.checked ? [...team.ids, t.value] : team.ids.filter((id) => id !== t.value);
     render();
-  } else if (t.id === "target-score") {
-    setupDraft.target = Number(t.value) || 10;
+  } else if (t.dataset.duo !== undefined) {
+    setupDraft.duo[Number(t.dataset.duo)] = t.value;
+    render();
+  } else if (t.id === "rounds") {
+    setupDraft.rounds = Number(t.value) || 5;
   } else if (t.id === "import-file" && t.files[0]) {
     t.files[0]
       .text()
