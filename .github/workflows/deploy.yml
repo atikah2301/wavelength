@@ -29,6 +29,13 @@ jobs:
             node --input-type=module --check < "$f" || { echo "Syntax error in $f"; exit 1; }
           done
 
+      - name: Decode binary files stored as base64 text
+        run: |
+          find . -name '*.b64' -not -path './.git/*' | while read -r f; do
+            tr -d '\r\n ' < "$f" | base64 -d > "${f%.b64}"
+            rm "$f"
+          done
+
       - name: Stamp service worker cache version
         run: sed -i "s/__CACHE_VERSION__/${{ github.sha }}/" sw.js
 
