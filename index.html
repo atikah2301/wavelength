@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Wavelength</title>
+    <meta name="description" content="Pass-and-play Wavelength: tune the dial to the psychic's clue" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#14152b" />
+    <link rel="icon" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Wavelength" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header"><h1>📡 Wavelength</h1></header>
+      <main id="view"></main>
+      <nav id="tabs" class="tabs" aria-label="Sections"></nav>
+      <footer class="version-footer"><span class="version-tag"></span></footer>
+    </div>
+    <script type="module" src="js/version-init.js"></script>
+    <script type="module" src="js/sw-register.js"></script>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
