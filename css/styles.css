@@ -13,7 +13,28 @@
   --band-3: #f2b134;
   --band-4: #ef5b5b;
   --radius: 12px;
+  --team-0: #4fb3bf;
+  --team-1: #ef8a5b;
 }
+
+/* The whole UI is tinted for whichever side should be holding the device. */
+:root[data-team="0"] {
+  --bg: #0d2a30;
+  --surface: #143a42;
+  --surface-raised: #1c4c56;
+  --border: #2f7480;
+  --accent: #4fb3bf;
+  --text-dim: #9fcdd3;
+}
+:root[data-team="1"] {
+  --bg: #33190e;
+  --surface: #47241a;
+  --surface-raised: #5c3022;
+  --border: #8f4d33;
+  --accent: #ef8a5b;
+  --text-dim: #e0b39c;
+}
+html, body, .card, .tabs, button, .team-score { transition: background-color 0.25s, border-color 0.25s; }
 
 * { box-sizing: border-box; }
 
@@ -129,3 +150,42 @@ details.custom-card summary { cursor: pointer; color: var(--text-dim); }
 
 .version-footer { text-align: center; padding-top: 8px; }
 .version-tag { font-size: 0.7rem; color: var(--text-dim); }
+
+.team-score.t0 { border-color: var(--team-0); }
+.team-score.t1 { border-color: var(--team-1); }
+.team-setup.t0 input[type="text"], .team-setup.t0 input:not([type]) { border-color: var(--team-0); }
+.team-setup.t1 input[type="text"], .team-setup.t1 input:not([type]) { border-color: var(--team-1); }
+.player-label.t0 { color: var(--team-0); }
+.player-label.t1 { color: var(--team-1); }
+
+select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.segmented { display: flex; gap: 0; margin-bottom: 8px; }
+.segmented .seg { margin-top: 0; border-radius: 0; }
+.segmented .seg:first-child { border-radius: 8px 0 0 8px; }
+.segmented .seg:last-child { border-radius: 0 8px 8px 0; border-left: none; }
+.segmented .seg.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+
+.handoff { display: inline-block; padding: 6px 12px; border-radius: 999px; background: var(--surface-raised); border: 1px solid var(--accent); }
+
+.guide details { border-top: 1px solid var(--border); padding: 4px 0; }
+.guide details:first-of-type { border-top: none; }
+.guide summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
+.guide-body { padding: 0 0 10px; line-height: 1.5; }
+.guide-body p { margin: 0 0 10px; }
+.guide-body ul, .guide-body ol { margin: 0 0 10px; padding-left: 22px; }
+.points-list { list-style: none; padding-left: 0; }
+.points-list li { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.swatch { width: 16px; height: 16px; border-radius: 4px; flex: 0 0 auto; }
+.swatch.s4 { background: var(--band-4); }
+.swatch.s3 { background: var(--band-3); }
+.swatch.s2 { background: var(--band-2); }
+.swatch.s0 { background: var(--surface-raised); border: 1px solid var(--border); }
