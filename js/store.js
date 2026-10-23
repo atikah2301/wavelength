@@ -8,7 +8,14 @@ const blank = () => ({ version: 1, players: [], customCards: [], game: null, his
 const isStr = (v) => typeof v === "string" && v.length > 0;
 const validPlayer = (p) => p && isStr(p.id) && isStr(p.name);
 const validCard = (c) => c && isStr(c.id) && isStr(c.left) && isStr(c.right);
-const validGame = (g) => g && typeof g === "object" && Array.isArray(g.teams) && g.teams.length >= 2;
+const validGame = (g) =>
+  g &&
+  typeof g === "object" &&
+  (g.mode === "duo" || g.mode === "teams") &&
+  typeof g.rounds === "number" &&
+  typeof g.turnsTaken === "number" &&
+  Array.isArray(g.teams) &&
+  g.teams.length === 2;
 const validHistory = (e) => e && isStr(e.id) && Array.isArray(e.teams);
 
 function normalise(raw) {
