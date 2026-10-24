@@ -46,18 +46,29 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The app fills the screen: header and footer stay put, only <main> scrolls. */
+html, body { height: 100%; overflow: hidden; }
+
 #app {
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding: calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 16px);
+  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
 }
 
-.app-header { padding: 12px 0; text-align: center; }
+.app-header { flex: 0 0 auto; padding: 12px 0; text-align: center; }
 .app-header h1 { margin: 0; font-size: 1.25rem; }
-main { flex: 1; }
+main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.app-footer { flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--bg); }
 h2 { margin: 0 0 12px; font-size: 1.1rem; }
 
 .card {
@@ -109,6 +120,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .error-message { color: var(--danger); }
 .notice { background: var(--surface-raised); padding: 10px 12px; border-radius: 8px; }
+.notice.warning { background: #e5484d; color: #fff; font-weight: 600; border: 1px solid #ff8a8e; }
 
 .list { list-style: none; margin: 12px 0 0; padding: 0; }
 .list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
@@ -144,11 +156,11 @@ details.custom-card summary { cursor: pointer; color: var(--text-dim); }
 .needle-knob { fill: var(--text); }
 .hub { fill: var(--text); }
 
-.tabs { position: sticky; bottom: 0; display: flex; gap: 4px; padding: 8px 0; background: var(--bg); }
+.tabs { display: flex; gap: 4px; padding: 8px 0; background: var(--bg); }
 .tab { margin: 0; padding: 8px 4px; font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border-color: transparent; color: var(--text-dim); }
 .tab.active { color: var(--accent); border-color: var(--accent); }
 
-.version-footer { text-align: center; padding-top: 8px; }
+.version-footer { text-align: center; padding: 2px 0 6px; }
 .version-tag { font-size: 0.7rem; color: var(--text-dim); }
 
 .team-score.t0 { border-color: var(--team-0); }
