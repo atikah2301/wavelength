@@ -1,4 +1,4 @@
-import { PRESETS } from "./cards.js";
+import { PRESETS, PRESET_PACK_ID, PRESET_PACK_NAME, titleCase, findClashes } from "./cards.js";
 import { createDial } from "./dial.js";
 import { randomTarget, scoreFor, directionCorrect } from "./scoring.js";
 import { guideHtml } from "./guide.js";
@@ -26,6 +26,20 @@ const esc = (text) =>
   String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 const allCards = () => [...PRESETS, ...getState().customCards];
+const allPacks = () => [{ id: PRESET_PACK_ID, name: PRESET_PACK_NAME }, ...getState().customPacks];
+const packName = (id) => allPacks().find((p) => p.id === id)?.name ?? PRESET_PACK_NAME;
+const cardsInPack = (id) => allCards().filter((c) => c.packId === id);
+
+// "Add to pack" picker shared by the Cards tab and the mid-game card maker. Typing
+// a name in the second box creates a pack (or reuses one with that name).
+function packFields(prefix, selectedId) {
+  const options = allPacks()
+    .map((p) => `<option value="${p.id}"${p.id === selectedId ? " selected" : ""}>${esc(p.name)}</option>`)
+    .join("");
+  return `<label for="${prefix}-pack">Add to pack</label><select id="${prefix}-pack">${options}</select>
+    <label for="${prefix}-newpack">Or start a new pack</label>
+    <input id="${prefix}-newpack" maxlength="40" placeholder="New pack name (optional)" />`;
+}
 const playerName = (id) => getState().players.find((p) => p.id === id)?.name ?? "(removed player)";
 
 function render() {
@@ -113,6 +127,7 @@ function renderSetup() {
       duo: [players[0].id, players[1].id],
       teams: [{ name: "Team 1", ids: [] }, { name: "Team 2", ids: [] }],
       rounds: 5,
+      packIds: [PRESET_PACK_ID],
     };
   }
   const d = setupDraft;
@@ -153,6 +168,13 @@ function renderSetup() {
           : "Two teams of at least two. The psychic's team scores, and the other team can win a catch-up point."
       }</p>
       ${d.mode === "duo" ? duoHtml : teamHtml}
+      <label>Card packs</label>
+      <div class="chips">${allPacks()
+        .map(
+          (p) =>
+            `<label class="chip"><input type="checkbox" data-pack="${p.id}"${d.packIds.includes(p.id) ? " checked" : ""} />${esc(p.name)} <span class="dim">(${cardsInPack(p.id).length})</span></label>`,
+        )
+        .join("")}</div>
       <label for="rounds">Number of rounds</label>
       <input id="rounds" type="number" min="1" max="20" value="${d.rounds}" />
       <p class="dim">A round is one turn as psychic for each ${d.mode === "duo" ? "player" : "team"}.</p>
@@ -168,6 +190,7 @@ function syncDraft(d, players) {
   const second = exists(d.duo[1]) && d.duo[1] !== first ? d.duo[1] : players.find((p) => p.id !== first)?.id;
   d.duo = [first, second];
   d.teams.forEach((t) => (t.ids = t.ids.filter(exists)));
+  d.packIds = d.packIds.filter((id) => allPacks().some((p) => p.id === id));
 }
 
 function renderScoreboardOnly(game) {
@@ -208,7 +231,8 @@ function renderRound(game, round) {
           <summary>Make up a card</summary>
           <label for="cc-left">Left end</label><input id="cc-left" maxlength="40" />
           <label for="cc-right">Right end</label><input id="cc-right" maxlength="40" />
-          <label class="check"><input type="checkbox" id="cc-save" /> Save to my cards for future games</label>
+          <label class="check"><input type="checkbox" id="cc-save" /> Save to a card pack for future games</label>
+          ${packFields("cc", game.packIds?.[0] ?? PRESET_PACK_ID)}
           <button data-action="use-custom">Use this card</button>
         </details></section>${abandon}`,
     };
@@ -292,7 +316,10 @@ function renderRound(game, round) {
 }
 
 function drawCard(game, avoidId) {
-  const cards = allCards();
+  // Games saved before packs existed have no packIds and play from the presets.
+  const packIds = game.packIds ?? [PRESET_PACK_ID];
+  let cards = allCards().filter((c) => packIds.includes(c.packId));
+  if (!cards.length) cards = allCards();
   let pool = cards.filter((c) => !game.usedCardIds.includes(c.id) && c.id !== avoidId);
   if (!pool.length) pool = cards.filter((c) => c.id !== avoidId);
   if (!pool.length) pool = cards;
@@ -394,24 +421,31 @@ function renderPlayers() {
 // ---------------------------------------------------------------- Cards
 
 function renderCards() {
-  const { customCards } = getState();
+  const customIds = new Set(getState().customCards.map((c) => c.id));
+  const sections = allPacks()
+    .map((p) => {
+      const cards = cardsInPack(p.id);
+      const items = cards
+        .map(
+          (c) =>
+            `<li><span>${esc(c.left)} ⟷ ${esc(c.right)}</span>${customIds.has(c.id) ? `<button class="link danger" data-action="delete-card" data-id="${c.id}">Delete</button>` : ""}</li>`,
+        )
+        .join("");
+      return `<details><summary>${esc(p.name)} (${cards.length})</summary>
+        ${cards.length ? `<ul class="list">${items}</ul>` : `<p class="dim">No cards in this pack yet.</p>`}
+        ${p.id === PRESET_PACK_ID ? "" : `<button class="link danger" data-action="delete-pack" data-id="${p.id}">Delete this pack and its cards</button>`}
+      </details>`;
+    })
+    .join("");
   return {
     html: `<section class="card"><h2>New card</h2>
       <form id="card-form">
         <label for="card-left">Left end</label><input id="card-left" maxlength="40" required />
         <label for="card-right">Right end</label><input id="card-right" maxlength="40" required />
+        ${packFields("card", PRESET_PACK_ID)}
         <button class="primary" type="submit">Save card</button>
       </form></section>
-      <section class="card"><h2>My cards (${customCards.length})</h2>
-      ${
-        customCards.length
-          ? `<ul class="list">${customCards
-              .map((c) => `<li><span>${esc(c.left)} ⟷ ${esc(c.right)}</span><button class="link danger" data-action="delete-card" data-id="${c.id}">Delete</button></li>`)
-              .join("")}</ul>`
-          : `<p class="dim">Cards you save will show up here.</p>`
-      }</section>
-      <section class="card"><h2>Preset cards (${PRESETS.length})</h2>
-      <ul class="list">${PRESETS.map((c) => `<li><span>${esc(c.left)} ⟷ ${esc(c.right)}</span></li>`).join("")}</ul></section>`,
+      <section class="card packs"><h2>Card packs</h2>${sections}</section>`,
   };
 }
 
@@ -443,9 +477,33 @@ function downloadExport() {
 
 // ---------------------------------------------------------------- Events
 
-function addCustomCard(left, right) {
-  const card = { id: `c${newId()}`, left: left.trim(), right: right.trim() };
-  update((s) => s.customCards.push(card));
+/**
+ * Saves a new card (title-cased) into a pack: the one picked, or a new pack if a
+ * name was typed. Warns first if either end already appears in that pack. Returns
+ * the saved card, or null if the user backed out at the warning.
+ */
+function saveNewCard(rawLeft, rawRight, chosenPackId, newPackName) {
+  const left = titleCase(rawLeft);
+  const right = titleCase(rawRight);
+  const typed = newPackName.trim();
+  let packId = chosenPackId;
+  if (typed) {
+    const match = allPacks().find((p) => p.name.toLowerCase() === typed.toLowerCase());
+    packId = match?.id ?? null;
+  }
+  const clashes = packId ? findClashes(cardsInPack(packId), left, right) : [];
+  if (clashes.length) {
+    const lines = clashes.map((c) => `"${c.term}" is already on ${c.card.left} ⟷ ${c.card.right}`).join("\n");
+    if (!confirm(`${lines}\n\nin ${packName(packId)}. Save this card anyway?`)) return null;
+  }
+  const card = { id: `c${newId()}`, left, right, packId };
+  update((s) => {
+    if (!packId) {
+      card.packId = `k${newId()}`;
+      s.customPacks.push({ id: card.packId, name: typed });
+    }
+    s.customCards.push(card);
+  });
   return card;
 }
 
@@ -478,6 +536,10 @@ document.addEventListener("click", (event) => {
         }
         teams = d.teams.map((t) => ({ name: t.name.trim() || "Team", playerIds: [...t.ids] }));
       }
+      if (!d.packIds.length || !d.packIds.some((id) => cardsInPack(id).length)) {
+        notice = "Pick at least one card pack that has cards in it.";
+        break;
+      }
       const rounds = Math.min(20, Math.max(1, Math.round(Number(document.getElementById("rounds").value)) || 5));
       update((s) => {
         s.game = {
@@ -485,6 +547,7 @@ document.addEventListener("click", (event) => {
           startedAt: new Date().toISOString(),
           mode: d.mode,
           rounds,
+          packIds: [...d.packIds],
           turnsTaken: 0,
           turn: 0,
           usedCardIds: [],
@@ -524,7 +587,10 @@ document.addEventListener("click", (event) => {
         break;
       }
       const save = document.getElementById("cc-save").checked;
-      const card = save ? addCustomCard(left, right) : { id: null, left, right };
+      const card = save
+        ? saveNewCard(left, right, document.getElementById("cc-pack").value, document.getElementById("cc-newpack").value)
+        : { id: null, left: titleCase(left), right: titleCase(right) };
+      if (!card) return;
       update((s) => {
         const r = s.game.round;
         r.card = { id: card.id, left: card.left, right: card.right };
@@ -561,6 +627,16 @@ document.addEventListener("click", (event) => {
     case "delete-card":
       update((s) => (s.customCards = s.customCards.filter((c) => c.id !== el.dataset.id)));
       break;
+    case "delete-pack": {
+      const id = el.dataset.id;
+      const count = cardsInPack(id).length;
+      if (!confirm(`Delete "${packName(id)}" and its ${count} card${count === 1 ? "" : "s"}?`)) return;
+      update((s) => {
+        s.customPacks = s.customPacks.filter((p) => p.id !== id);
+        s.customCards = s.customCards.filter((c) => c.packId !== id);
+      });
+      break;
+    }
     case "export":
       downloadExport();
       return;
@@ -592,8 +668,14 @@ document.addEventListener("submit", (event) => {
       update((s) => s.players.push({ id: newId(), name }));
     }
   } else if (event.target.id === "card-form") {
-    addCustomCard(document.getElementById("card-left").value, document.getElementById("card-right").value);
-    notice = "Card saved.";
+    const card = saveNewCard(
+      document.getElementById("card-left").value,
+      document.getElementById("card-right").value,
+      document.getElementById("card-pack").value,
+      document.getElementById("card-newpack").value,
+    );
+    if (!card) return;
+    notice = `Card saved to ${packName(card.packId)}.`;
   }
   render();
 });
@@ -608,6 +690,10 @@ document.addEventListener("change", (event) => {
   if (t.dataset.teamPlayer !== undefined) {
     const team = setupDraft.teams[Number(t.dataset.teamPlayer)];
     team.ids = t.checked ? [...team.ids, t.value] : team.ids.filter((id) => id !== t.value);
+    render();
+  } else if (t.dataset.pack !== undefined) {
+    const ids = setupDraft.packIds;
+    setupDraft.packIds = t.checked ? [...ids, t.dataset.pack] : ids.filter((id) => id !== t.dataset.pack);
     render();
   } else if (t.dataset.duo !== undefined) {
     setupDraft.duo[Number(t.dataset.duo)] = t.value;
