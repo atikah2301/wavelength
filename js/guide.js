@@ -72,10 +72,14 @@ const SECTIONS = [
   },
   {
     title: "Cards",
-    body: `<p>The app comes with 60 preset cards. During a turn you can tap <strong>Make up a card</strong> and type your own
-      two opposite ends.</p>
-      <p>Tick <em>Save to my cards</em> to keep it for future games. Leave it unticked and it's used for that turn only.
-      You can also add or delete saved cards in the <strong>Cards</strong> tab.</p>
+    body: `<p>Cards live in <strong>packs</strong>. The app comes with the <em>Preset cards</em> pack (60 cards). When you start
+      a game you tick which packs to play from, and you can pick more than one.</p>
+      <p>During a turn you can tap <strong>Make up a card</strong> and type your own two opposite ends. Tick
+      <em>Save to a card pack</em> to keep it, choosing an existing pack or typing a new pack name. Leave it unticked and
+      it's used for that turn only. You can also add cards, and delete cards or whole packs, in the
+      <strong>Cards</strong> tab.</p>
+      <p>New cards are tidied into Title Case. If either end already appears on a card in the same pack (for example
+      "Rare" when <em>Rare ⟷ Common</em> exists), you'll get a warning and can still save it.</p>
       <p>The app avoids repeating a card within a game until it has run through them all.</p>`,
   },
   {
