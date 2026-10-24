@@ -1,13 +1,16 @@
 // All data lives in this browser's localStorage under one key. Export/import
 // moves the whole thing between devices as a single JSON file.
+import { PRESET_PACK_ID } from "./cards.js";
+
 const KEY = "wavelength:v1";
 const FORMAT = "wavelength-data";
 
-const blank = () => ({ version: 1, players: [], customCards: [], game: null, history: [] });
+const blank = () => ({ version: 1, players: [], customPacks: [], customCards: [], game: null, history: [] });
 
 const isStr = (v) => typeof v === "string" && v.length > 0;
 const validPlayer = (p) => p && isStr(p.id) && isStr(p.name);
 const validCard = (c) => c && isStr(c.id) && isStr(c.left) && isStr(c.right);
+const validPack = (p) => p && isStr(p.id) && isStr(p.name) && p.id !== PRESET_PACK_ID;
 const validGame = (g) =>
   g &&
   typeof g === "object" &&
@@ -22,7 +25,14 @@ function normalise(raw) {
   const data = blank();
   if (!raw || typeof raw !== "object") return data;
   if (Array.isArray(raw.players)) data.players = raw.players.filter(validPlayer);
-  if (Array.isArray(raw.customCards)) data.customCards = raw.customCards.filter(validCard);
+  if (Array.isArray(raw.customPacks)) data.customPacks = raw.customPacks.filter(validPack);
+  // Cards saved before packs existed (or pointing at a missing pack) join the preset pack.
+  const packIds = new Set([PRESET_PACK_ID, ...data.customPacks.map((p) => p.id)]);
+  if (Array.isArray(raw.customCards)) {
+    data.customCards = raw.customCards
+      .filter(validCard)
+      .map((c) => ({ ...c, packId: packIds.has(c.packId) ? c.packId : PRESET_PACK_ID }));
+  }
   if (Array.isArray(raw.history)) data.history = raw.history.filter(validHistory);
   if (validGame(raw.game)) data.game = raw.game;
   return data;
