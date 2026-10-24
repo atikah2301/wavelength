@@ -62,6 +62,9 @@ const SECTIONS = [
         <li><strong>Call (Teams mode only).</strong> The other team calls left or right.</li>
         <li><strong>Reveal.</strong> The target and its bands appear, points are added, and play moves to the other side.</li>
       </ol>
+      <p>A banner at the top of each screen says who may look: <strong>👀 Everyone can look</strong>,
+      <strong>🙈 Only [name] looks next</strong> (hand over the device first), or <strong>🔒 SECRET</strong> with a red frame
+      while the target is on screen.</p>
       <p>Tip: the target stays hidden unless the psychic taps to show it, and reloading the page always hides it again.</p>`,
   },
   {
