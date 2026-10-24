@@ -72,7 +72,7 @@ const SECTIONS = [
   },
   {
     title: "Cards",
-    body: `<p>Cards live in <strong>packs</strong>. The app comes with the <em>Preset cards</em> pack (60 cards). When you start
+    body: `<p>Cards live in <strong>packs</strong>. The app comes with the <em>Starter pack</em> (60 cards). When you start
       a game you tick which packs to play from, and you can pick more than one.</p>
       <p>During a turn you can tap <strong>Make up a card</strong> and type your own two opposite ends. Tick
       <em>Save to a card pack</em> to keep it, choosing an existing pack or typing a new pack name. Leave it unticked and
