@@ -20,6 +20,8 @@ let tab = "play";
 // persisted, so reloading the page always hides it again.
 let peeking = false;
 let setupDraft = null;
+// Id of the player whose name is being edited in the Players tab, if any.
+let editingPlayerId = null;
 let notice = "";
 let noticeIsWarning = false;
 
@@ -47,6 +49,12 @@ function packFields(prefix, selectedId) {
     <label for="${prefix}-newpack">Or start a new pack</label>
     <input id="${prefix}-newpack" maxlength="40" placeholder="New pack name (optional)" />`;
 }
+// Player names are compared ignoring case and extra spaces, so "alex", "Alex" and
+// " Alex  " all count as the same person.
+const nameKey = (name) => name.trim().replace(/\s+/g, " ").toLowerCase();
+const cleanName = (name) => name.trim().replace(/\s+/g, " ");
+const nameTaken = (name, exceptId = null) =>
+  getState().players.some((p) => p.id !== exceptId && nameKey(p.name) === nameKey(name));
 const playerName = (id) => getState().players.find((p) => p.id === id)?.name ?? "(removed player)";
 
 function render() {
@@ -457,12 +465,27 @@ function renderPlayers() {
         players.length
           ? `<ul class="list">${players
               .map((p) => {
+                if (p.id === editingPlayerId) {
+                  return `<li><form id="player-edit-form" class="row edit-row" data-id="${p.id}">
+                    <input id="player-edit-name" value="${esc(p.name)}" maxlength="30" aria-label="Player name" required />
+                    <button class="primary" type="submit">Save</button>
+                    <button type="button" data-action="cancel-edit">Cancel</button></form></li>`;
+                }
                 const s = playerStats(p.id);
-                return `<li><span>${esc(p.name)} <span class="dim">${s.played} played · ${s.wins} won</span></span><button class="link danger" data-action="delete-player" data-id="${p.id}"${inGame.has(p.id) ? " disabled title=\"In a game\"" : ""}>Remove</button></li>`;
+                return `<li><span>${esc(p.name)} <span class="dim">${s.played} played · ${s.wins} won</span></span>
+                  <span class="row-actions"><button class="link" data-action="edit-player" data-id="${p.id}">Rename</button>
+                  <button class="link danger" data-action="delete-player" data-id="${p.id}"${inGame.has(p.id) ? " disabled title=\"In a game\"" : ""}>Remove</button></span></li>`;
               })
               .join("")}</ul>`
           : `<p class="dim">No players yet.</p>`
       }</section>`,
+    after: () => {
+      const input = document.getElementById("player-edit-name");
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    },
   };
 }
 
@@ -564,6 +587,13 @@ document.addEventListener("click", (event) => {
   switch (action) {
     case "tab":
       tab = el.dataset.tab;
+      editingPlayerId = null;
+      break;
+    case "edit-player":
+      editingPlayerId = el.dataset.id;
+      break;
+    case "cancel-edit":
+      editingPlayerId = null;
       break;
     case "set-mode":
       setupDraft.mode = el.dataset.mode;
@@ -670,9 +700,14 @@ document.addEventListener("click", (event) => {
     case "finish":
       finishGame();
       break;
-    case "delete-player":
-      update((s) => (s.players = s.players.filter((p) => p.id !== el.dataset.id)));
+    case "delete-player": {
+      const id = el.dataset.id;
+      const { played } = playerStats(id);
+      const history = played ? ` Their record (${played} game${played === 1 ? "" : "s"} played) will no longer show.` : "";
+      if (!confirm(`Remove ${playerName(id)}?${history}`)) return;
+      update((s) => (s.players = s.players.filter((p) => p.id !== id)));
       break;
+    }
     case "delete-card":
       update((s) => (s.customCards = s.customCards.filter((c) => c.id !== el.dataset.id)));
       break;
@@ -707,12 +742,30 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("submit", (event) => {
   event.preventDefault();
-  if (event.target.id === "player-form") {
-    const name = document.getElementById("player-name").value.trim();
+  if (event.target.id === "player-edit-form") {
+    const id = event.target.dataset.id;
+    const name = cleanName(document.getElementById("player-edit-name").value);
     if (!name) return;
-    const { players } = getState();
-    if (players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      warn(`${name} already exists.`);
+    if (nameTaken(name, id)) {
+      warn(`There is already a player called ${name}. Names must be different.`);
+    } else {
+      update((s) => {
+        const player = s.players.find((p) => p.id === id);
+        if (player) player.name = name;
+        // A 2-player game names each side after its player, so keep that in step.
+        if (s.game?.mode === "duo") {
+          s.game.teams.forEach((t) => {
+            if (t.playerIds[0] === id) t.name = name;
+          });
+        }
+      });
+      editingPlayerId = null;
+    }
+  } else if (event.target.id === "player-form") {
+    const name = cleanName(document.getElementById("player-name").value);
+    if (!name) return;
+    if (nameTaken(name)) {
+      warn(`There is already a player called ${name}. Names must be different.`);
     } else {
       update((s) => s.players.push({ id: newId(), name }));
     }
