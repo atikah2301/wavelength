@@ -64,7 +64,7 @@ const PAIRS = [
 ];
 
 export const PRESET_PACK_ID = "preset";
-export const PRESET_PACK_NAME = "Preset cards";
+export const PRESET_PACK_NAME = "Starter pack";
 
 export const PRESETS = PAIRS.map(([left, right], i) => ({ id: `p${i}`, packId: PRESET_PACK_ID, left, right }));
 
