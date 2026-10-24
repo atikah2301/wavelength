@@ -158,12 +158,13 @@ details.custom-card summary { cursor: pointer; color: var(--text-dim); }
 .needle-knob { fill: var(--text); }
 .hub { fill: var(--text); }
 
-.tabs { display: flex; gap: 4px; padding: 8px 0; background: var(--bg); }
+.tabs { display: flex; gap: 4px; padding: 6px 0 2px; background: var(--bg); }
 .tab { margin: 0; padding: 8px 4px; font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border-color: transparent; color: var(--text-dim); }
 .tab.active { color: var(--accent); border-color: var(--accent); }
 
-.version-footer { text-align: center; padding: 2px 0 6px; }
-.app-footer { padding-bottom: env(safe-area-inset-bottom); }
+.version-footer { text-align: center; padding: 0 0 2px; line-height: 1.2; }
+/* The home bar is only a thin line at the very edge, so reserve about a third of the safe area. */
+.app-footer { padding-bottom: calc(env(safe-area-inset-bottom) * 0.35); }
 .version-tag { font-size: 0.7rem; color: var(--text-dim); }
 
 .team-score.t0 { border-color: var(--team-0); }
