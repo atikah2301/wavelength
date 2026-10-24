@@ -49,14 +49,16 @@ html, body {
 /* The app fills the screen: header and footer stay put, only <main> scrolls. */
 html, body { height: 100%; overflow: hidden; }
 
+/* Pinned to the screen edges rather than sized with vh/dvh, which some phone
+   browsers report differently from the visible area. */
 #app {
+  position: fixed;
+  inset: 0;
   max-width: 480px;
   margin: 0 auto;
-  height: 100vh;
-  height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+  padding: env(safe-area-inset-top) 16px 0;
 }
 
 .app-header { flex: 0 0 auto; padding: 12px 0; text-align: center; }
@@ -161,6 +163,7 @@ details.custom-card summary { cursor: pointer; color: var(--text-dim); }
 .tab.active { color: var(--accent); border-color: var(--accent); }
 
 .version-footer { text-align: center; padding: 2px 0 6px; }
+.app-footer { padding-bottom: env(safe-area-inset-bottom); }
 .version-tag { font-size: 0.7rem; color: var(--text-dim); }
 
 .team-score.t0 { border-color: var(--team-0); }
