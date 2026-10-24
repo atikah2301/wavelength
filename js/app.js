@@ -124,7 +124,7 @@ function renderSetup() {
   if (!setupDraft) {
     setupDraft = {
       mode: players.length >= 4 ? "teams" : "duo",
-      duo: [players[0].id, players[1].id],
+      duo: [null, null],
       teams: [{ name: "Team 1", ids: [] }, { name: "Team 2", ids: [] }],
       rounds: 5,
       packIds: [PRESET_PACK_ID],
@@ -148,7 +148,7 @@ function renderSetup() {
   const duoHtml = [0, 1]
     .map(
       (i) => `<label for="duo-${i}" class="player-label t${i}">Player ${i + 1}</label>
-        <select id="duo-${i}" data-duo="${i}">${players
+        <select id="duo-${i}" data-duo="${i}"><option value=""${d.duo[i] ? "" : " selected"}>Choose a player…</option>${players
           .map(
             (p) =>
               `<option value="${p.id}"${p.id === d.duo[i] ? " selected" : ""}${p.id === d.duo[1 - i] ? " disabled" : ""}>${esc(p.name)}</option>`,
@@ -156,6 +156,9 @@ function renderSetup() {
           .join("")}</select>`,
     )
     .join("");
+  const cardsSelected = d.packIds.reduce((sum, id) => sum + cardsInPack(id).length, 0);
+  const cardsNeeded = d.rounds * 2;
+  const tooFew = cardsSelected < cardsNeeded;
   return {
     html: `<section class="card"><h2>New game</h2>
       <div class="segmented" role="group" aria-label="Game mode">
@@ -175,10 +178,15 @@ function renderSetup() {
             `<label class="chip"><input type="checkbox" data-pack="${p.id}"${d.packIds.includes(p.id) ? " checked" : ""} />${esc(p.name)} <span class="dim">(${cardsInPack(p.id).length})</span></label>`,
         )
         .join("")}</div>
+      <p class="${tooFew ? "error-message" : "dim"}" aria-live="polite">${cardsSelected} card${cardsSelected === 1 ? "" : "s"} selected${
+        tooFew
+          ? `. Not enough for ${d.rounds} round${d.rounds === 1 ? "" : "s"}: that needs ${cardsNeeded} (one per turn). Pick more packs or lower the rounds.`
+          : ""
+      }</p>
       <label for="rounds">Number of rounds</label>
       <input id="rounds" type="number" min="1" max="20" value="${d.rounds}" />
       <p class="dim">A round is one turn as psychic for each ${d.mode === "duo" ? "player" : "team"}.</p>
-      <button class="primary" data-action="start-game">Start game</button>
+      <button class="primary" data-action="start-game"${tooFew ? " disabled" : ""}>Start game</button>
     </section>`,
   };
 }
@@ -186,9 +194,8 @@ function renderSetup() {
 // Setup choices are kept in memory, so drop any player who was removed since.
 function syncDraft(d, players) {
   const exists = (id) => players.some((p) => p.id === id);
-  const first = exists(d.duo[0]) ? d.duo[0] : players.find((p) => p.id !== d.duo[1])?.id;
-  const second = exists(d.duo[1]) && d.duo[1] !== first ? d.duo[1] : players.find((p) => p.id !== first)?.id;
-  d.duo = [first, second];
+  d.duo = d.duo.map((id) => (exists(id) ? id : null));
+  if (d.duo[0] && d.duo[0] === d.duo[1]) d.duo[1] = null;
   d.teams.forEach((t) => (t.ids = t.ids.filter(exists)));
   d.packIds = d.packIds.filter((id) => allPacks().some((p) => p.id === id));
 }
@@ -525,7 +532,7 @@ document.addEventListener("click", (event) => {
       let teams;
       if (d.mode === "duo") {
         if (!d.duo[0] || !d.duo[1]) {
-          notice = "Pick two different players.";
+          notice = "Choose both players first.";
           break;
         }
         teams = d.duo.map((id) => ({ name: playerName(id), playerIds: [id] }));
@@ -536,11 +543,12 @@ document.addEventListener("click", (event) => {
         }
         teams = d.teams.map((t) => ({ name: t.name.trim() || "Team", playerIds: [...t.ids] }));
       }
-      if (!d.packIds.length || !d.packIds.some((id) => cardsInPack(id).length)) {
-        notice = "Pick at least one card pack that has cards in it.";
+      const rounds = Math.min(20, Math.max(1, Math.round(Number(document.getElementById("rounds").value)) || 5));
+      const available = d.packIds.reduce((sum, id) => sum + cardsInPack(id).length, 0);
+      if (available < rounds * 2) {
+        notice = `Not enough cards selected: ${rounds} rounds needs ${rounds * 2}, and you have ${available}.`;
         break;
       }
-      const rounds = Math.min(20, Math.max(1, Math.round(Number(document.getElementById("rounds").value)) || 5));
       update((s) => {
         s.game = {
           id: newId(),
@@ -696,10 +704,11 @@ document.addEventListener("change", (event) => {
     setupDraft.packIds = t.checked ? [...ids, t.dataset.pack] : ids.filter((id) => id !== t.dataset.pack);
     render();
   } else if (t.dataset.duo !== undefined) {
-    setupDraft.duo[Number(t.dataset.duo)] = t.value;
+    setupDraft.duo[Number(t.dataset.duo)] = t.value || null;
     render();
   } else if (t.id === "rounds") {
-    setupDraft.rounds = Number(t.value) || 5;
+    setupDraft.rounds = Math.min(20, Math.max(1, Math.round(Number(t.value)) || 5));
+    render();
   } else if (t.id === "import-file" && t.files[0]) {
     t.files[0]
       .text()
