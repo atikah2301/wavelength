@@ -21,6 +21,13 @@ let tab = "play";
 let peeking = false;
 let setupDraft = null;
 let notice = "";
+let noticeIsWarning = false;
+
+// Warnings show in red and scroll back to the top so they can't be missed.
+function warn(message) {
+  notice = message;
+  noticeIsWarning = true;
+}
 
 const esc = (text) =>
   String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -49,9 +56,11 @@ function render() {
   ).join("");
   const banner = [
     saveFailed ? `<p class="error-message">Couldn't save to this browser's storage. Export your data before closing.</p>` : "",
-    notice ? `<p class="notice">${esc(notice)}</p>` : "",
+    notice ? `<p class="notice${noticeIsWarning ? " warning" : ""}" role="${noticeIsWarning ? "alert" : "status"}">${esc(notice)}</p>` : "",
   ].join("");
+  const hadWarning = Boolean(notice) && noticeIsWarning;
   notice = "";
+  noticeIsWarning = false;
   const body = {
     play: renderPlay,
     players: renderPlayers,
@@ -60,6 +69,7 @@ function render() {
     data: renderData,
   }[tab]();
   view.innerHTML = banner + body.html;
+  if (hadWarning) view.scrollTo({ top: 0 });
   applyTheme();
   body.after?.();
 }
@@ -563,13 +573,13 @@ document.addEventListener("click", (event) => {
       let teams;
       if (d.mode === "duo") {
         if (!d.duo[0] || !d.duo[1]) {
-          notice = "Choose both players first.";
+          warn("Choose both players first.");
           break;
         }
         teams = d.duo.map((id) => ({ name: playerName(id), playerIds: [id] }));
       } else {
         if (d.teams.some((t) => t.ids.length < 2)) {
-          notice = "Each team needs at least two players: a psychic and someone to guess.";
+          warn("Each team needs at least two players: a psychic and someone to guess.");
           break;
         }
         teams = d.teams.map((t) => ({ name: t.name.trim() || "Team", playerIds: [...t.ids] }));
@@ -577,7 +587,7 @@ document.addEventListener("click", (event) => {
       const rounds = Math.min(20, Math.max(1, Math.round(Number(document.getElementById("rounds").value)) || 5));
       const available = d.packIds.reduce((sum, id) => sum + cardsInPack(id).length, 0);
       if (available < rounds * 2) {
-        notice = `Not enough cards selected: ${rounds} rounds needs ${rounds * 2}, and you have ${available}.`;
+        warn(`Not enough cards selected: ${rounds} rounds needs ${rounds * 2}, and you have ${available}.`);
         break;
       }
       update((s) => {
@@ -621,7 +631,7 @@ document.addEventListener("click", (event) => {
       const left = document.getElementById("cc-left").value.trim();
       const right = document.getElementById("cc-right").value.trim();
       if (!left || !right) {
-        notice = "Fill in both ends of the card.";
+        warn("Fill in both ends of the card.");
         update((s) => (s.game.round.customOpen = true));
         break;
       }
@@ -702,7 +712,7 @@ document.addEventListener("submit", (event) => {
     if (!name) return;
     const { players } = getState();
     if (players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      notice = `${name} already exists.`;
+      warn(`${name} already exists.`);
     } else {
       update((s) => s.players.push({ id: newId(), name }));
     }
@@ -754,7 +764,7 @@ document.addEventListener("change", (event) => {
         notice = "Data imported.";
       })
       .catch((err) => {
-        notice = err.message;
+        warn(err.message);
       })
       .finally(render);
   }
