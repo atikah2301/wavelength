@@ -270,7 +270,7 @@ function renderRoundBody(game, round) {
           <label for="cc-left">Left end</label><input id="cc-left" maxlength="40" />
           <label for="cc-right">Right end</label><input id="cc-right" maxlength="40" />
           <label class="check"><input type="checkbox" id="cc-save" /> Save to a card pack for future games</label>
-          ${packFields("cc", game.packIds?.[0] ?? PRESET_PACK_ID)}
+          <div id="cc-pack-fields" hidden>${packFields("cc", game.packIds?.[0] ?? PRESET_PACK_ID)}</div>
           <button data-action="use-custom">Use this card</button>
         </details></section>${abandon}`,
     };
@@ -730,6 +730,9 @@ document.addEventListener("change", (event) => {
     const team = setupDraft.teams[Number(t.dataset.teamPlayer)];
     team.ids = t.checked ? [...team.ids, t.value] : team.ids.filter((id) => id !== t.value);
     render();
+  } else if (t.id === "cc-save") {
+    // Show or hide in place (no re-render) so half-typed card ends aren't lost.
+    document.getElementById("cc-pack-fields").hidden = !t.checked;
   } else if (t.dataset.pack !== undefined) {
     const ids = setupDraft.packIds;
     setupDraft.packIds = t.checked ? [...ids, t.dataset.pack] : ids.filter((id) => id !== t.dataset.pack);
