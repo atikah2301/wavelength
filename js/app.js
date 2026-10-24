@@ -89,6 +89,9 @@ function applyTheme() {
   const root = document.documentElement;
   if (index === null) delete root.dataset.team;
   else root.dataset.team = String(index);
+  const round = tab === "play" ? game?.round : null;
+  if (round?.phase === "peek" && peeking) root.dataset.secret = "1";
+  else delete root.dataset.secret;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(root).getPropertyValue("--bg").trim() || "#14152b";
 }
@@ -212,7 +215,38 @@ function cardLabel(card) {
   return `<div class="spectrum"><span>${esc(card.left)}</span><span class="arrow">⟷</span><span>${esc(card.right)}</span></div>`;
 }
 
+// How private the current screen is. "open": everyone can look. "prep": the device
+// is about to show the target, so only the named person should look. "secret": the
+// target is on screen right now.
+function screenMode(game, round) {
+  const team = game.teams[game.turn];
+  const other = game.teams[(game.turn + 1) % game.teams.length];
+  const duo = game.mode === "duo";
+  const psychic = duo ? team.name : playerName(round.psychicId);
+  switch (round.phase) {
+    case "card":
+      return { kind: "open", icon: "👀", text: `Everyone can look. ${psychic} picks the card.` };
+    case "peek":
+      return peeking
+        ? { kind: "secret", icon: "🔒", text: `SECRET: target showing. Only ${psychic} looks.` }
+        : { kind: "prep", icon: "🙈", text: `Only ${psychic} looks next. Everyone else look away.` };
+    case "guess":
+      return { kind: "open", icon: "👀", text: `Everyone can look. ${duo ? other.name : team.name} guess${duo ? "es" : ""} now.` };
+    case "call":
+      return { kind: "open", icon: "👀", text: `Everyone can look. ${other.name} call it.` };
+    default:
+      return { kind: "open", icon: "👀", text: "Everyone can look. Target revealed." };
+  }
+}
+
 function renderRound(game, round) {
+  const mode = screenMode(game, round);
+  const result = renderRoundBody(game, round);
+  result.html = `<div class="screen-banner ${mode.kind}" role="status"><span class="banner-icon">${mode.icon}</span><span>${esc(mode.text)}</span></div>${result.html}`;
+  return result;
+}
+
+function renderRoundBody(game, round) {
   const team = game.teams[game.turn];
   const other = game.teams[(game.turn + 1) % game.teams.length];
   const duo = game.mode === "duo";
@@ -220,10 +254,7 @@ function renderRound(game, round) {
   const turnLine = duo
     ? `Psychic: <strong>${esc(team.name)}</strong> · Guesser: <strong>${esc(other.name)}</strong>`
     : `<strong>${esc(team.name)}</strong> · psychic: <strong>${esc(psychicName)}</strong>`;
-  const holder = { card: psychicName, peek: psychicName, guess: duo ? other.name : team.name, call: other.name }[round.phase];
-  const head = `${scoreboard(game)}<p class="center turn-line">${turnLine}</p>${
-    holder ? `<p class="center"><span class="handoff">📱 Device with <strong>${esc(holder)}</strong></span></p>` : ""
-  }`;
+  const head = `${scoreboard(game)}<p class="center turn-line">${turnLine}</p>`;
   const abandon = `<button class="link danger" data-action="abandon">Abandon game</button>`;
 
   if (round.phase === "card") {
